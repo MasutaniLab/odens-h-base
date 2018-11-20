@@ -55,7 +55,7 @@ KXR-L2用のクラスを用意している．
     - `protobuf_MSVC_STATIC_RUNTIME` のチェックを外す．
   - 再度 Configure をクリック．
   - Generate をクリック．
-- `～\protobuf-3.5.1\cmake\buf\protobuf.sln`をVisual Studio 2015で開く．
+- `～\protobuf-3.5.1\cmake\build\protobuf.sln`をVisual Studio 2015で開く．
 - ソリューション構成を`Release x64`にする．
 - メニューのビルド→ソリューションのビルド．
 - `C:\Program Files` の下に`protobuf`フォルダを作る．拒否されるが続行する．
