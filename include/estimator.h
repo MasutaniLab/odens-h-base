@@ -1,13 +1,13 @@
 ﻿///
 ///@file estimator.h
-///@brief Orthogonal用位置推定
+///@brief Estimatorクラスの宣言
 ///@par Copyright
 /// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///@addtogroup estimator Estimator
-///@brief Orthogonal用位置推定
+///@brief Orthogonal用位置推定クラス
 ///@{
 ///
 

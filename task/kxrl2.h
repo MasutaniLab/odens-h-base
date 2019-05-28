@@ -6,7 +6,7 @@
 ///@par 履歴
 ///- 2018/02/18 升谷 保博 公開用
 ///- 2017/03/05 升谷 保博
-///@addtogroup kxr-l2 KXR-L2
+///@addtogroup kxrl2 KXR-L2
 ///@brief KXR-L2のためのクラス
 ///@{
 ///

@@ -2,12 +2,15 @@
 ///@file odens-h-test.cpp
 ///@brief odens-hの基本機能のテストプログラム（公開用）
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016-2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/03/03 升谷 保博
+///- 2019/02/03 升谷 保博 Drawのクラス化に対応
 ///- 2018/02/18 升谷 保博 KXR-L2を追加
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///
+
 #include <iostream>
 #include <string>
 #include <cmath>
@@ -38,7 +41,8 @@ int main(int argc, char* argv[])
   Config::print();
 
   getTimeInitialize();
-  drawInitialize(Config::MyColor, Config::MyNumber); 
+  const double drawInterval = 1.0 / 30.0;
+  draw.initialize(Config::MyColor, Config::MyNumber, drawInterval);
   inkeyInitialize();
 
   //SSL-Visionの設定
@@ -100,9 +104,11 @@ int main(int argc, char* argv[])
     cout << "一時停止中．r: 開始" << endl;
   }
   bool loop = true;
+  double prevTime = getTime();
   while (loop) {
     srInfo sinfo;
     VisionInfo vinfo;
+    double btime = getTime();
     int r = vh.get(sinfo, vinfo);
     if (r < 0) {
       cout << "ビジョンタイムアウト" << endl;
@@ -111,6 +117,9 @@ int main(int argc, char* argv[])
     }
 
     double currentTime = getTime();
+    //cout << "dt: " << currentTime - prevTime 
+    //  << ", vision: " << currentTime - btime << endl;
+    prevTime = currentTime;
 
     srInfo sinfo2; //推定値
     Timed2D ballVel;
@@ -134,7 +143,7 @@ int main(int argc, char* argv[])
       s = "無効";
       rinfo.command = ref::NORMAL_START;
     }
-    drawString(-FIELD_LENGTH2,FIELD_WIDTH2+100,16,s.c_str());
+    draw.string(-FIELD_LENGTH2,FIELD_WIDTH2+100,16,s.c_str());
   
     //キーの状態を調べる
     int c = inkey();
@@ -150,7 +159,7 @@ int main(int argc, char* argv[])
           Config::Pause = false;
           break;
         case 'R':
-          drawReverseField();
+          draw.reverseField();
           break;
         case 'S':
           Config::AttackRight = !Config::AttackRight;
@@ -169,8 +178,8 @@ int main(int argc, char* argv[])
     if (Config::Pause) {
       //一時停止の場合
       ptask->none();
-      drawString(0,-FIELD_WIDTH2-300,16,ptask->getCommandString().c_str());
-      draw(sinfo);
+      draw.string(0,-FIELD_WIDTH2-300,16,ptask->getCommandString().c_str());
+      draw.set(sinfo);
       continue; //ループの最初へ
     }
 
@@ -188,14 +197,14 @@ int main(int argc, char* argv[])
     }
 
     //フィールド描画
-    drawString(0,FIELD_WIDTH2+100,16,mode.getString().c_str());
-    drawString(0,-FIELD_WIDTH2-300,16,ptask->getCommandString().c_str());
-    draw(sinfo, sinfo2);
+    draw.string(0,FIELD_WIDTH2+100,16,mode.getString().c_str());
+    draw.string(0,-FIELD_WIDTH2-300,16,ptask->getCommandString().c_str());
+    draw.set(sinfo, sinfo2);
 
     //ログ出力
     logger.write(currentTime, sinfo, ballVel, rinfo, mode, ptask->getCommand());
   }
-  drawTerminate();
+  draw.terminate();
   return 0;
 }
 

@@ -2,8 +2,9 @@
 ///@file task-khr3.cpp
 ///@brief KHR-3HV用 Taskクラスのメンバ関数の定義（公開用）
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016-2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/03/03 升谷 保博
 ///- 2017/03/05 升谷 保博
 ///@addtogroup khr3
 ///@{
@@ -94,7 +95,7 @@ namespace odens {
   }
 
   ///
-  ///@brief 目標への移動（不完全）
+  ///@brief 目標への移動
   ///@param[in] info フィールドの位置情報
   ///@param[in] target 目標位置
   ///@return 終了状態
@@ -102,11 +103,6 @@ namespace odens {
   int TaskKHR3::move(const srInfo &info, const Orthogonal &target)
   {
     Command com;
-
-#if 1
-    //デバッグ用
-    const string directionString[] = { "Forward", "StepLeft", "StepRight", "Backward" };
-#endif
     const Orthogonal &robot = info.robot[m_ourColor][m_myNumber];
     if (robot.isInvisible()) {
       cerr << "自分が見えない" << endl;
@@ -121,14 +117,7 @@ namespace odens {
     Orthogonal targetLocal = target.transform(robot); //目標をロボット座標系へ変換
     double qG = targetLocal.theta; //ローカル座標系における目標の角度
     double qP = targetLocal.angle(); //目標へ向かう角度
-
-    int rr = 0;
-
     double d = targetLocal.distance(); //目標までの距離
-
-    static int d_mode = 0;
-
-    //cout << qG << " " << qP << " " << d << endl;
 
     //以下で，qGとqPから並進の方法（前進，左進，右進，後進の四択）を決定する
     vector<pair<double, int>> vp; //回転角度の絶対値の和と並進の方法（0～3）の組の並び
@@ -140,112 +129,82 @@ namespace odens {
       vp.push_back(pair<double, int>(abs(q1) + abs(q3), i));
     }
     sort(vp.begin(), vp.end()); //角度の絶対値の和に対してソートする．
-    //vp[0].second に最も回転の小さくなる並進の番号が入る
-    //cout << "aaa" << endl;
-
-    double q1 = normalizeAngle(qP + offset[vp[0].second]);
-
-    //	cout<< directionString[vp[0].second] << endl;
-    //	cout << q1 << endl;
-
-    if (d_mode == 0)
-    {
-      if (abs(d) < 70)
-        d_mode = 2;
-      else if (abs(d) < 100) {
-        d_mode = 1;
-      }
-
-      //		else if( abs(d) < 70){
-      //			d_mode = 2;
-      //		}
-
-      else if (abs(q1) > DEG2RAD(35)) {
-        if (q1 > 0) {
-          com = TurnLeft;
-        } else {
-          com = TurnRight;
-        }
-      }
-
-      else {
-        com = transCom[vp[0].second];
-      }
-    }
-
-    else if (d_mode == 1)
-    {
-      if (abs(d) > 150) {
-        d_mode = 0;
-      }
-
-      if (abs(d) < 70) {
-        d_mode = 2;
-      }
-
-      else if (abs(q1) > DEG2RAD(20)) {
-        if (q1 > 0) {
-          com = TurnLeft;
-        } else {
-          com = TurnRight;
-        }
-
-        /*}else if( abs(q1) > DEG2RAD(20) ){
-        if( q1>0 ) com = TurnLeftSmall;
-        else com = TurnRightSmall;*/
-
-
-      } else {
-        com = transCom[vp[0].second];
-      }
-    }
-
-    else if (d_mode == 2)
-    {
-      /*if( abs(d) > 150){
-      d_mode = 0;
-      }*/
-
-      if (abs(d) > 130) {
-        d_mode = 1;
-      }
-
-      else if (abs(qG) > DEG2RAD(60)) {
-        if (qG > 0)com = TurnLeft;
-        else com = TurnRight;
-
-      } else if (abs(qG) > DEG2RAD(10)) {
-        if (qG > 0) com = TurnLeftSmall;
-        else com = TurnRightSmall;
-
-      } else {
-        com = CommandNone;
-        rr = 10;
-      }
-    }
-#if 0 //デバッグ用（リリースする内容では無効にすること！）
-    static int a = 0;
-    if (a == 10)
-    {
-      cout << "距離 = " << d << endl;
-      cout << "d_mode = " << d_mode << endl;
-      cout << "Q1= " << RAD2DEG(q1) << endl;
-      cout << "QG= " << RAD2DEG(qG) << endl;
-    }
-    a++;
-    if (a > 11)
-      a = 0;
-#endif
 #if 0
-    //デバッグ用
+                                //デバッグ用
     for (size_t i = 0; i < vp.size(); i++) {
       cout << i << " " << vp[i].second << " " << vp[i].first << endl;
     }
+    const string directionString[] = { "Forward", "StepLeft", "StepRight", "Backward" };
     cout << directionString[vp[0].second] << endl;
 #endif
+    //vp[0].second に最も回転の小さくなる並進の番号が入る
+    double q1 = normalizeAngle(qP + offset[vp[0].second]);
+    Command trans = transCom[vp[0].second];
 
+    //状態遷移
+    enum Mode { Far, Middle, Near };
+    static Mode mode = Far;
+    if (mode == Far) {
+      if (abs(d) < 70)
+        mode = Near;
+      else if (abs(d) < 100) {
+        mode = Middle;
+      }
+    } else if (mode == Middle) {
+      if (abs(d) > 150) {
+        mode = Far;
+      } else if (abs(d) < 70) {
+        mode = Near;
+      }
+    } else if (mode == Near) {
+      if (abs(d) > 130) {
+        mode = Far;
+      }
+    }
+
+    //状態によるコマンドの決定
+    int retval = 0;
+    if (mode == Far) {
+      if (abs(q1) > DEG2RAD(35)) {
+        if (q1 > 0) {
+          com = TurnLeft;
+        } else {
+          com = TurnRight;
+        }
+      } else {
+        com = trans;
+      }
+    } else if (mode == Middle) {
+      if (abs(q1) > DEG2RAD(20)) {
+        if (q1 > 0) {
+          com = TurnLeft;
+        } else {
+          com = TurnRight;
+        }
+      } else {
+        com = trans;
+      }
+    } else if (mode == Near) {
+      if (abs(qG) > DEG2RAD(60)) {
+        if (qG > 0) {
+          com = TurnLeft;
+        } else {
+          com = TurnRight;
+        }
+      } else if (abs(qG) > DEG2RAD(10)) {
+        if (qG > 0) {
+          com = TurnLeftSmall;
+        } else {
+          com = TurnRightSmall;
+        }
+      } else {
+        //|qG|が10[deg]未満ならば完了と判断
+        com = CommandNone;
+        retval = 10;
+      }
+    }
     m_robot.setCommand(com);
-    return rr;
+    return retval;
   }
 
 } //namespace odens

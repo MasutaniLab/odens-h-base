@@ -1,9 +1,11 @@
 ﻿///
 ///@file draw.cpp
-///@brief 描画のための関数の宣言を集めたもの
+///@brief Drawクラスのメンバ関数の定義
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016, 2017, 2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/02/02 升谷 保博 クラス化
+///- 2019/02/01 升谷 保博 別スレッド化, CDrawDataを分離
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///- 2008/02/13
@@ -36,7 +38,6 @@
   #define FONTNAME "Courier"
 #endif
 
-
 #include <iostream>
 #include <cstring>
 #include <cstdio>
@@ -44,287 +45,204 @@
 #include <vector>
 #include <cassert>
 #include <stdarg.h>
+#define DRAW_MAIN
 #include "draw.h"
 #include "util.h"
+#include "cdrawdata.h"
 
 using namespace std;
 
 namespace odens {
 
-#define SCALE (0.1) ///<描画スケール1mmが何dotに相当するか
-#define DT (1) ///<使っていない？
-#define GUI_FRAME_RATE (30)///< 描画速度(default=30)[fps]
-
-#define MAX_DRAW_OBJECT (256) ///<1フレームで描画可能な最大オブジェクト数
-#define POINT         (1) ///<点
-#define CROSS         (2) ///<十時
-#define LINE          (3) ///<線
-#define RECTANGLE     (4) ///<四角形
-#define FILLRECTANGLE (5) ///<四角形（塗りつぶし）
-#define CIRCLE        (6) ///<円
-#define FILLCIRCLE    (7) ///<円（塗りつぶし）
-#define STRING        (8) ///<文字列
-
-#define VIEW_NONE   (0) ///<視覚情報なし
-#define VIEW_GLOBAL (1) ///<視覚情報グローバル
-
-//プロトタイプ宣言（このファイル内だけで使う関数）
-void drawField();
-void drawBall(Orthogonal p);
-void drawBall(Orthogonal p, Orthogonal p2);
-void drawRobot(int color, int num, Orthogonal p, bool number);
-void drawRobot(int color, int num, Orthogonal p, bool number, Orthogonal p2, bool number2);
-void drawFieldLine(Orthogonal p, Orthogonal q);
-
-//このファイル内だけで使う大域変数
-int mycolor;      ///<自機の色（チーム）
-int mynumber;     ///<自機の番号
-int mainwindow;   ///<ウィンドウ識別番号
-bool gWindowEnable = false;    ///<ウィンドウを表示するかどうか?
-bool gDrawPos      = true;    ///<座標の表示するかどうか
-bool gPositiveIsRightSide;         ///<画面の右が青チームか?
-bool gLogFileViewer= false;    ///<ログファイルビューアフラグ
-int gDrawViewMode  = VIEW_NONE;///<視界情報フラグ(none or global or local)
-int gRed   = 255;///<描画色(赤)
-int gGreen = 128;///<描画色(緑)
-int gBlue  = 255;///<描画色(青)
-double gDrawTime = 0;         ///<描画時間
-double gDrawFrameTime = 0.015;///<描画時間
-
 ///
-///@brief ユーザ描画用構造体
-///
-struct DRAW_OBJECT
-{
-  int type;             ///<種類
-  double x1;            ///<x座標1
-  double y1;            ///<y座標1
-  double x2;            ///<x座標2
-  double y2;            ///<y座標2
-  double r;             ///<半径
-  unsigned char red;    ///<色の赤成分
-  unsigned char green;  ///<色の緑成分
-  unsigned char blue;   ///<色の青成分
-  string str;           ///<文字列
-};
-
-///
-///@brief ユーザ描画用クラス
-///
-class CDrawData
-{
-public:
-  CDrawData();
-
-  void SetPoint( double x, double y, unsigned rd,unsigned gr,unsigned bl);
-  void SetCross( double x, double y, double size,unsigned rd,unsigned gr,unsigned bl);
-  void SetLine(  double x1,double y1,double x2,double y2, unsigned rd,unsigned gr,unsigned bl);
-  void SetRectangle(    double x, double y, double cx,double cy,unsigned rd,unsigned gr,unsigned bl);
-  void SetFillRectangle(double x, double y, double cx,double cy,unsigned rd,unsigned gr,unsigned bl);
-  void SetCircle(    double x, double y, double r,unsigned rd,unsigned gr,unsigned bl);
-  void SetFillCircle(double x, double y, double r,unsigned rd,unsigned gr,unsigned bl);
-  void SetString(    double x, double y, int size,unsigned rd,unsigned gr,unsigned bl,char *str);
-
-  bool GetObject(int id,DRAW_OBJECT &data);
-  void CleanData();
-private:
-  vector<DRAW_OBJECT> m_object; ///<描画オブジェクトの並び
-  int m_num; ///<オブジェクトの数
-  int m_max; ///<オブジェクトの最大数
-}gDrawData; ///<CDrawDataクラスの大域オブジェクト
-
-void drawCommandProc();
-
-
-///
-///@brief     描画用ウィンドウの作成。
+///@brief     初期化
 ///@param[in] color  自分のチームカラー ( @ref BLUE or @ref YELLOW )
-///@param[in] number 自分の機体番号  ( 1 to 5 )
-///@retval    -1 エラー
-///@retval    -1以外 成功。 ( 作成されたウィンドウの識別子 )
+///@param[in] number 自分の機体番号  ( 1 to 3 )
+///@param[in] interval 描画処理の時間間隔 [s]
 ///
-///グローバルビューモード用関数
-///
-int drawInitialize(int color, int number)
+int Draw::initialize(int color, int number, double interval)
 {
-  if(gWindowEnable)return mainwindow;
+  if (m_windowEnable)return m_window;
 
   //ウィンドウ作成
-  int re=gopen((int)((FIELD_LENGTH+2*FIELD_MARGIN)*SCALE),(int)((FIELD_WIDTH+2*FIELD_MARGIN)*SCALE));
+  int win = gopen((int)((FIELD_LENGTH+2*FIELD_MARGIN)*SCALE),(int)((FIELD_WIDTH+2*FIELD_MARGIN)*SCALE));
   
-  if(re==-1)
-  { //ウィンドウ初期化失敗
-    printf("error - initialize window\n");
+  if(win == -1){
+    //ウィンドウ作成失敗
+    cerr << "error - initialize window" << endl;
     return -1;
   }
   
   //初期化成功
-  mycolor          = color;
-  mynumber         = number;
-  mainwindow       = re;
-  gPositiveIsRightSide = true;
-  gDrawTime        = getTime();
-  gDrawFrameTime   = (double)(200/(GUI_FRAME_RATE))/200.0;
+  m_mycolor = color;
+  m_mynumber = number;
+  m_interval = interval;
+  m_window = win;
+  m_positiveIsRightSide = true;
+  m_key = -1;
   
+  //ノンブロックに設定
+  gsetnonblock(ENABLE);
+
   //ウィンドウの表示レイヤと描画先レイヤ（バックバッファ）を設定
-  layer(mainwindow,0,1);
+  layer(m_window,0,1);
   
   //ウィンドウの座標系を変更する(左下と右上の座標値を設定する)
-  window(mainwindow,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN,
+  window(m_window,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN,
     FIELD_LENGTH2+FIELD_MARGIN,FIELD_WIDTH2+FIELD_MARGIN);
   
   //ウィンドウ描画文字列のフォント設定
-  gsetfontset(mainwindow,FONTNAME);
- 
+  gsetfontset(m_window,FONTNAME);
+
   //フラグ設定
-  gWindowEnable    = true;
-  gDrawViewMode    = VIEW_GLOBAL;
+  m_windowEnable = true;
 
-  return re;
+  boost::thread thread(&Draw::main, this);
+  m_thread.swap(thread);
+
+  return win;
 }
 
 ///
-///@brief     フィールドを描画する
-///@param[in] si フィールドの座標情報 (直交座標系)
-///@return なし
+///@brief 終了処理
 ///
-///- グローバルビューモード用関数
-///
-void draw(const srInfo &si)
+void Draw::terminate()
 {
-  if(!gWindowEnable || gDrawViewMode!=VIEW_GLOBAL)
-  {
-    gDrawData.CleanData();
-    return;
+  if (m_thread.joinable()) {
+    m_loop = false;
+    m_thread.join();
   }
-
-
-  //描画時間に達しているか？
-  if(getTime()-gDrawTime<gDrawFrameTime)
-  {
-    gDrawData.CleanData();
-    return;
-  }
-  gDrawTime = getTime();
-
-  //フィールドを描画する
-  drawField();
-
-  //ユーザー描画  
-  drawCommandProc();
-
-  //ボールを描く
-  drawBall(si.ball);
-
-  //各ロボットを描く
-  for ( int i = 1; i <= MAX_ROBOT_NUM; i++) 
-  {
-    drawRobot(BLUE,   i, si.robot[BLUE][i],   si.id[BLUE][i]);
-    drawRobot(YELLOW, i, si.robot[YELLOW][i], si.id[YELLOW][i]);
-  }
-  
-  //ウィンドウ更新
-  copylayer(mainwindow,1,0);
+  m_windowEnable = false;
+  gclose(m_window);
 }
 
 ///
-///@brief     フィールドを描画する（推定値付き）
-///@param[in] si フィールドの座標情報 (直交座標系)
-///@param[in] si2 フィールドの座標情報の推定値 (直交座標系)
+///@brief
 ///@return なし
 ///
-void draw(const srInfo &si, const srInfo &si2)
+void Draw::main()
 {
-  if(!gWindowEnable || gDrawViewMode!=VIEW_GLOBAL)
-  {
-    gDrawData.CleanData();
-    return;
+  srInfo si, si2;
+  VisionInfo vi;
+  DrawMode drawMode;
+  Timer timer;
+  m_loop = true;
+  while (m_loop) {
+    //時間間隔がintervalになるように眠る
+    double dt = timer.sleep(m_interval);
+    //cout << "draw dt: " << dt << endl;
+    {
+      boost::mutex::scoped_lock lock(m_mutex);
+      drawMode = m_drawMode;
+      if (drawMode == NoEstimation) {
+        si = m_srInfo;
+      } else if (drawMode == WithEstimation) {
+        si = m_srInfo;
+        si2 = m_srInfo2;
+      } else if (drawMode == Vision) {
+        vi = m_visionInfo;
+      }
+    }
+
+    if (!m_windowEnable) continue;
+
+    m_key = ::ggetch();
+
+    //フィールドを描画する
+    drawField();
+
+    //ユーザー描画  
+    m_drawDataBuffer.draw(m_window);
+
+    if (drawMode == NoEstimation) {
+      //ボールを描く
+      drawBall(si.ball);
+      //各ロボットを描く
+      for (int i = 1; i <= MAX_ROBOT_NUM; i++) {
+        drawRobot(BLUE, i, si.robot[BLUE][i], si.id[BLUE][i]);
+        drawRobot(YELLOW, i, si.robot[YELLOW][i], si.id[YELLOW][i]);
+      }
+    } else if (drawMode == WithEstimation) {
+      //ボールを描く
+      drawBall(si.ball, si2.ball);
+      //各ロボットを描く
+      for (int i = 1; i <= MAX_ROBOT_NUM; i++) {
+        drawRobot(BLUE, i,
+          si.robot[BLUE][i], si.id[BLUE][i],
+          si2.robot[BLUE][i], si2.id[BLUE][i]);
+        drawRobot(YELLOW, i,
+          si.robot[YELLOW][i], si.id[YELLOW][i],
+          si2.robot[YELLOW][i], si2.id[YELLOW][i]);
+      }
+    } else if (drawMode == Vision) {
+      //ボールを描く
+      for (int i = 0; i<vi.nBall; i++) {
+        drawBall(vi.ball[i]);
+      }
+      //各ロボットを描く
+      for (int i = 0; i < vi.nRobot[BLUE]; i++) {
+        drawRobot(BLUE, vi.number[BLUE][i], vi.robot[BLUE][i],
+          vi.number[BLUE][i] != INVISIBLE);
+      }
+      for (int i = 0; i < vi.nRobot[YELLOW]; i++) {
+        drawRobot(YELLOW, vi.number[YELLOW][i], vi.robot[YELLOW][i],
+          vi.number[YELLOW][i] != INVISIBLE);
+      }
+    }
+
+    //ウィンドウ更新
+    copylayer(m_window, 1, 0);
   }
-
-
-  //描画時間に達しているか？
-  if(getTime()-gDrawTime<gDrawFrameTime)
-  {
-    gDrawData.CleanData();
-    return;
-  }
-  gDrawTime = getTime();
-
-  //フィールドを描画する
-  drawField();
-
-  //ユーザー描画  
-  drawCommandProc();
-
-  //ボールを描く
-  drawBall(si.ball,si2.ball);
-
-  //各ロボットを描く
-  for ( int i = 1; i <= MAX_ROBOT_NUM; i++) 
-  {
-    drawRobot(BLUE,   i, 
-      si.robot[BLUE][i],   si.id[BLUE][i], 
-      si2.robot[BLUE][i],   si2.id[BLUE][i]);
-    drawRobot(YELLOW, i, 
-      si.robot[YELLOW][i], si.id[YELLOW][i], 
-      si2.robot[YELLOW][i], si2.id[YELLOW][i]);
-  }
-  
-  //ウィンドウ更新
-  copylayer(mainwindow,1,0);
 }
 
 ///
-///@brief     フィールドを描画する VisionInfo版
-///@param[in] vi フィールドの座標情報 (直交座標系)
+///@brief     フィールドを設定する
+///@param[in] si フィールドの座標情報
 ///@return なし
 ///
-///- グローバルビューモード用関数
-///
-void draw(const VisionInfo &vi)
+void Draw::set(const srInfo &si)
 {
-  if(!gWindowEnable || gDrawViewMode!=VIEW_GLOBAL)
   {
-    gDrawData.CleanData();
-    return;
+    boost::mutex::scoped_lock lock(m_mutex);
+    m_drawMode = NoEstimation;
+    m_srInfo = si;
+    m_drawDataBuffer = m_drawData;
   }
+  m_drawData.clear();
+}
 
-
-  //描画時間に達しているか？
-  if(getTime()-gDrawTime<gDrawFrameTime)
+///
+///@brief     フィールド情報を設定する（推定値付き）
+///@param[in] si フィールドの座標情報)
+///@param[in] si2 フィールドの座標情報の推定値
+///@return なし
+///
+void Draw::set(const srInfo &si, const srInfo &si2)
+{
   {
-    gDrawData.CleanData();
-    return;
+    boost::mutex::scoped_lock lock(m_mutex);
+    m_drawMode = WithEstimation;
+    m_srInfo = si;
+    m_srInfo2 = si2;
+    m_drawDataBuffer = m_drawData;
   }
-  gDrawTime = getTime();
+  m_drawData.clear();
+}
 
-  //フィールドを描画する
-  drawField();
-
-  //ユーザー描画  
-  drawCommandProc();
-
-  //ボールを描く
-  for (int i=0; i<vi.nBall; i++) {
-    drawBall(vi.ball[i]);
-  }
-
-  //各ロボットを描く
-  for ( int i = 0; i < vi.nRobot[BLUE]; i++) 
+///
+///@brief     フィールド情報を設定する VisionInfo版
+///@param[in] vi フィールドの座標情報
+///@return なし
+///
+void Draw::set(const VisionInfo &vi)
+{
   {
-    drawRobot(BLUE,   vi.number[BLUE][i], vi.robot[BLUE][i],   
-      vi.number[BLUE][i]!=INVISIBLE);
+    boost::mutex::scoped_lock lock(m_mutex);
+    m_drawMode = Vision;
+    m_visionInfo = vi;
+    m_drawDataBuffer = m_drawData;
   }
- 
-  for ( int i = 0; i < vi.nRobot[YELLOW]; i++) 
-  {
-    drawRobot(YELLOW, vi.number[YELLOW][i], vi.robot[YELLOW][i], 
-      vi.number[YELLOW][i]!=INVISIBLE);
-  }
-  
-  
-  //ウィンドウ更新
-  copylayer(mainwindow,1,0);
+  m_drawData.clear();
 }
 
 
@@ -333,51 +251,51 @@ void draw(const VisionInfo &vi)
 ///@return なし
 ///
 void
-drawField()
+Draw::drawField()
 {
   //描画色の変更
-  newrgbcolor(mainwindow,25,115,25);
+  ::newrgbcolor(m_window,25,115,25);
   
   //四角形描画（フィールドを緑で塗りつぶす）左下の座標を指定する。
-  fillrect(mainwindow,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN,
+  ::fillrect(m_window,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN,
            FIELD_LENGTH+2*FIELD_MARGIN,FIELD_WIDTH+2*FIELD_MARGIN);
 
   //描画色変更（白）
-  newrgbcolor(mainwindow,255,255,255);
+  ::newrgbcolor(m_window,255,255,255);
 
   //相手ゴール
-  drawrect(mainwindow,FIELD_LENGTH2,-GOAL_WIDTH2,GOAL_DEPTH,GOAL_WIDTH);
+  ::drawrect(m_window,FIELD_LENGTH2,-GOAL_WIDTH2,GOAL_DEPTH,GOAL_WIDTH);
 
   //自陣ゴール
-  drawrect(mainwindow,-FIELD_LENGTH2-GOAL_DEPTH,-GOAL_WIDTH2,GOAL_DEPTH,GOAL_WIDTH);
+  ::drawrect(m_window,-FIELD_LENGTH2-GOAL_DEPTH,-GOAL_WIDTH2,GOAL_DEPTH,GOAL_WIDTH);
 
   //フィールドライン
-  drawrect(mainwindow,-FIELD_LENGTH2, -FIELD_WIDTH2, FIELD_LENGTH, FIELD_WIDTH);//四角形描画（塗りつぶしなし）
+  ::drawrect(m_window,-FIELD_LENGTH2, -FIELD_WIDTH2, FIELD_LENGTH, FIELD_WIDTH);//四角形描画（塗りつぶしなし）
  
-  line(mainwindow,0,-FIELD_WIDTH2,PENUP);  //線の初期位置を設定
-  line(mainwindow,0, FIELD_WIDTH2,PENDOWN);//線の終端位置を設定
+  ::line(m_window,0,-FIELD_WIDTH2,PENUP);  //線の初期位置を設定
+  ::line(m_window,0, FIELD_WIDTH2,PENDOWN);//線の終端位置を設定
 
   //まん中の円
-  circle(mainwindow,0,0,CIRCLE_RADIUS,CIRCLE_RADIUS);
+  ::circle(m_window,0,0,CIRCLE_RADIUS,CIRCLE_RADIUS);
   //左の四角形
-  drawrect(mainwindow,-FIELD_LENGTH2,-GOAL_AREA_WIDTH2,GOAL_AREA_LENGTH,GOAL_AREA_WIDTH);
+  ::drawrect(m_window,-FIELD_LENGTH2,-GOAL_AREA_WIDTH2,GOAL_AREA_LENGTH,GOAL_AREA_WIDTH);
   //右の四角形
-  drawrect(mainwindow,FIELD_LENGTH2-GOAL_AREA_LENGTH,-GOAL_AREA_WIDTH2,GOAL_AREA_LENGTH,GOAL_AREA_WIDTH);
+  ::drawrect(m_window,FIELD_LENGTH2-GOAL_AREA_LENGTH,-GOAL_AREA_WIDTH2,GOAL_AREA_LENGTH,GOAL_AREA_WIDTH);
 }
 
 ///
-///@brief     2点間の線分ドを描画する
+///@brief     2点間の線分を描画する
 ///@param[in] p 端点1
 ///@param[in] q 端点2
 ///@return なし
 ///
 void
-drawFieldLine(Orthogonal p, Orthogonal q)
+Draw::drawFieldLine(Orthogonal p, Orthogonal q)
 {
   if ( p.x == INVISIBLE ||q.x == INVISIBLE ) return;
-  newrgbcolor(mainwindow,192,192,192);//描画色変更（ライトグレイ）
-  line(mainwindow,(float)p.x, (float)p.y, PENUP);  //線の初期位置を設定
-  line(mainwindow,(float)q.x, (float)q.y, PENDOWN);//線の終端位置を設定
+  ::newrgbcolor(m_window,192,192,192);//描画色変更（ライトグレイ）
+  ::line(m_window,(float)p.x, (float)p.y, PENUP);  //線の初期位置を設定
+  ::line(m_window,(float)q.x, (float)q.y, PENDOWN);//線の終端位置を設定
 }
 
 ///
@@ -386,15 +304,15 @@ drawFieldLine(Orthogonal p, Orthogonal q)
 ///@return なし
 ///
 void
-drawBall(Orthogonal p)
+Draw::drawBall(Orthogonal p)
 {
   if (p.isInvisible()) return;
-  newrgbcolor(mainwindow,255,128,64);//描画色変更（オレンジ）
-  fillarc(mainwindow,(float)p.x,(float)p.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
-  if(gDrawPos) {//座標表示
-    int sign = (gPositiveIsRightSide ? 1 : -1);
-    newrgbcolor(mainwindow,255,0,0);
-    drawstr(mainwindow,(float)(p.x-90*sign),(float)(p.y-180*sign),10,0,
+  ::newrgbcolor(m_window,255,128,64);//描画色変更（オレンジ）
+  ::fillarc(m_window,(float)p.x,(float)p.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
+  if(m_drawPos) {//座標表示
+    int sign = (m_positiveIsRightSide ? 1 : -1);
+    ::newrgbcolor(m_window,255,0,0);
+    ::drawstr(m_window,(float)(p.x-90*sign),(float)(p.y-180*sign),10,0,
       "%5.0lf,%5.0lf",p.x,p.y);
   }
 }
@@ -406,20 +324,20 @@ drawBall(Orthogonal p)
 ///@return なし
 ///
 void
-drawBall(Orthogonal p, Orthogonal p2)
+Draw::drawBall(Orthogonal p, Orthogonal p2)
 {
   if (p.isInvisible() && p2.isInvisible()) return;
-  newrgbcolor(mainwindow,255,128,64);//描画色変更（オレンジ）
+  ::newrgbcolor(m_window,255,128,64);//描画色変更（オレンジ）
   if (!p.isInvisible()) {
-    fillarc(mainwindow,(float)p.x,(float)p.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
+    ::fillarc(m_window,(float)p.x,(float)p.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
   }
   if (!p2.isInvisible()) {
-    drawarc(mainwindow,(float)p2.x,(float)p2.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
+    ::drawarc(m_window,(float)p2.x,(float)p2.y,BALL_RADIUS*1.5,BALL_RADIUS*1.5,0,360,1);
   }
-  if(gDrawPos) {//座標表示
-    int sign = (gPositiveIsRightSide ? 1 : -1);
-    newrgbcolor(mainwindow,255,0,0);
-    drawstr(mainwindow,(float)(p2.x-90*sign),(float)(p2.y-180*sign),10,0,
+  if(m_drawPos) {//座標表示
+    int sign = (m_positiveIsRightSide ? 1 : -1);
+    ::newrgbcolor(m_window,255,0,0);
+    ::drawstr(m_window,(float)(p2.x-90*sign),(float)(p2.y-180*sign),10,0,
       "%5.0lf,%5.0lf",p2.x,p2.y);
   }
 }
@@ -433,36 +351,36 @@ drawBall(Orthogonal p, Orthogonal p2)
 ///@return なし
 ///
 void 
-drawRobot(int color, int num, Orthogonal p, bool number)
+Draw::drawRobot(int color, int num, Orthogonal p, bool number)
 {
   if (p.isInvisible()) return;
   if (color == BLUE) {
-    newrgbcolor(mainwindow,0,0,255);//描画色変更（青）
+    ::newrgbcolor(m_window,0,0,255);//描画色変更（青）
   } else {
-    newrgbcolor(mainwindow,255,255,0);//描画色変更（黄）
+    ::newrgbcolor(m_window,255,255,0);//描画色変更（黄）
   }
-  fillarc(mainwindow,(float)p.x,(float)p.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
+  ::fillarc(m_window,(float)p.x,(float)p.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
 
-  newrgbcolor(mainwindow,0,0,0);//描画色変更（黒）
+  ::newrgbcolor(m_window,0,0,0);//描画色変更（黒）
 
   if(p.theta != INVISIBLE)  {//方向描画
-    line(mainwindow,(float)p.x, (float) p.y, PENUP);  //線の初期位置を設定
-    line(mainwindow,(float)(p.x+cos(p.theta)*ROBOT_RADIUS*1.2), 
+    ::line(m_window,(float)p.x, (float) p.y, PENUP);  //線の初期位置を設定
+    ::line(m_window,(float)(p.x+cos(p.theta)*ROBOT_RADIUS*1.2), 
                     (float)(p.y+sin(p.theta)*ROBOT_RADIUS*1.2), PENDOWN);//線の終端位置を設定
   }
 
-  int sign = (gPositiveIsRightSide ? 1 : -1);
+  int sign = (m_positiveIsRightSide ? 1 : -1);
   if(number) {
     //ロボット番号描画
     char str[3];
     str[0]='0'+num/10;
     str[1]='0'+num%10;
     str[2]='\0';
-    drawstr(mainwindow,(float)(p.x-70*sign),(float)(p.y+40*sign),14,0,str);
+    ::drawstr(m_window,(float)(p.x-70*sign),(float)(p.y+40*sign),14,0,str);
   }
-  if(gDrawPos) {//座標表示
-    newrgbcolor(mainwindow,255,0,0);
-    drawstr(mainwindow,(float)(p.x-90*sign),(float)(p.y-180*sign),10,0,
+  if(m_drawPos) {//座標表示
+    ::newrgbcolor(m_window,255,0,0);
+    ::drawstr(m_window,(float)(p.x-90*sign),(float)(p.y-180*sign),10,0,
       "%5.0lf,%5.0lf,%4.0lf",p.x,p.y,p.theta/M_PI*180);
   }
 }
@@ -478,414 +396,131 @@ drawRobot(int color, int num, Orthogonal p, bool number)
 ///@return なし
 ///
 void 
-drawRobot(int color, int num, Orthogonal p, bool number, Orthogonal p2, bool number2)
+Draw::drawRobot(int color, int num, Orthogonal p, bool number, Orthogonal p2, bool number2)
 {
   if (p.isInvisible() && p2.isInvisible()) return;
   if (color == BLUE) {
-    newrgbcolor(mainwindow,0,0,255);//描画色変更（青）
+    ::newrgbcolor(m_window,0,0,255);//描画色変更（青）
   } else {
-    newrgbcolor(mainwindow,255,255,0);//描画色変更（黄）
+    ::newrgbcolor(m_window,255,255,0);//描画色変更（黄）
   }
   if (!p.isInvisible()) {
-    fillarc(mainwindow,(float)p.x,(float)p.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
+    ::fillarc(m_window,(float)p.x,(float)p.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
   }
   if (!p2.isInvisible()) {
-    drawarc(mainwindow,(float)p2.x,(float)p2.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
+    ::drawarc(m_window,(float)p2.x,(float)p2.y,ROBOT_RADIUS,ROBOT_RADIUS,0,360,1);
   }
 
-  newrgbcolor(mainwindow,0,0,0);//描画色変更（黒）
+  ::newrgbcolor(m_window,0,0,0);//描画色変更（黒）
   //方向描画
   if (!p.isInvisible() && p.theta != INVISIBLE) {
-    line(mainwindow,(float)p.x, (float) p.y, PENUP);  //線の初期位置を設定
-    line(mainwindow,(float)(p.x+cos(p.theta)*ROBOT_RADIUS*1.2), 
+    ::line(m_window,(float)p.x, (float) p.y, PENUP);  //線の初期位置を設定
+    ::line(m_window,(float)(p.x+cos(p.theta)*ROBOT_RADIUS*1.2), 
       (float)(p.y+sin(p.theta)*ROBOT_RADIUS*1.2), PENDOWN);//線の終端位置を設定
   }
   if (!p2.isInvisible() && p2.theta != INVISIBLE) {
-    line(mainwindow,(float)p2.x, (float) p2.y, PENUP);  //線の初期位置を設定
-    line(mainwindow,(float)(p2.x+cos(p2.theta)*ROBOT_RADIUS*1.2), 
+    ::line(m_window,(float)p2.x, (float) p2.y, PENUP);  //線の初期位置を設定
+    ::line(m_window,(float)(p2.x+cos(p2.theta)*ROBOT_RADIUS*1.2), 
       (float)(p2.y+sin(p2.theta)*ROBOT_RADIUS*1.2), PENDOWN);//線の終端位置を設定
   }
 
-  int sign = (gPositiveIsRightSide ? 1 : -1);
+  int sign = (m_positiveIsRightSide ? 1 : -1);
   if(number2) {
     //ロボット番号描画
     char str[3];
     str[0]='0'+num/10;
     str[1]='0'+num%10;
     str[2]='\0';
-    drawstr(mainwindow,(float)(p2.x-70*sign),(float)(p2.y+40*sign),14,0,str);
+    ::drawstr(m_window,(float)(p2.x-70*sign),(float)(p2.y+40*sign),14,0,str);
   }
-  if(gDrawPos) {//座標表示
-    newrgbcolor(mainwindow,255,0,0);
-    drawstr(mainwindow,(float)(p2.x-90*sign),(float)(p2.y-180*sign),10,0,
+  if(m_drawPos) {//座標表示
+    ::newrgbcolor(m_window,255,0,0);
+    ::drawstr(m_window,(float)(p2.x-90*sign),(float)(p2.y-180*sign),10,0,
       "%5.0lf,%5.0lf,%4.0lf",p2.x,p2.y,p2.theta/M_PI*180);
   }
-}
-
-///
-///@brief     自分のロボットの追加の描画
-///@param[in] color  色
-///@param[in] num    番号
-///@param[in] p      位置
-///@param[in] number 番号を描画するか？
-///@return なし
-///
-void 
-drawMyRobot(int color, int num, Orthogonal p,bool number)
-{
-  if ( p.x == INVISIBLE ) return;
-  p.y *= -1;
-  if(number)
-  {
-    if ( color == BLUE ) 
-    {
-      newrgbcolor(mainwindow,0,0,255);//描画色変更（青）
-    } 
-    else 
-    {
-      newrgbcolor(mainwindow,255,255,0);//描画色変更（黄）
-    }
-
-    fillarc(mainwindow,(float)p.x,(float)p.y,ROBOT_RADIUS*1.2,ROBOT_RADIUS*1.2,0,360,1);
-  }
-}
-
-//----------------------------------------------------------------------
-//共通の関数
-
-///
-///@brief     ウィンドウを閉じ、終了処理を行う
-///@return なし
-///
-///- 座標系に関係無く共通
-///
-void drawTerminate()
-{
-  gWindowEnable = false;
-  gcloseall();
 }
 
 ///
 ///@brief ウィンドウに機体の座標を表示する
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawShowPositionData()
+void Draw::showPositionData()
 {
-  gDrawPos = !gDrawPos;
+  m_drawPos = !m_drawPos;
 }
 
 ///
 ///@brief     (上下左右)反転表示する
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawReverseField()
+void Draw::reverseField()
 {
-  gPositiveIsRightSide = !gPositiveIsRightSide;
-  if(gPositiveIsRightSide)
-  {
-    window(mainwindow,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN-10,
+  m_positiveIsRightSide = !m_positiveIsRightSide;
+  if (m_positiveIsRightSide) {
+    window(m_window,-FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN-10,
                        FIELD_LENGTH2+FIELD_MARGIN,+FIELD_WIDTH2+FIELD_MARGIN+10);
-  }
-  else
-  {
-    window(mainwindow, FIELD_LENGTH2+FIELD_MARGIN,+FIELD_WIDTH2+FIELD_MARGIN+10,
+  } else {
+    window(m_window, FIELD_LENGTH2+FIELD_MARGIN,+FIELD_WIDTH2+FIELD_MARGIN+10,
                       -FIELD_LENGTH2-FIELD_MARGIN,-FIELD_WIDTH2-FIELD_MARGIN-10);
   }
 }
 
 ///
-///@brief     ウィンドウの表示/非表示を行う
+///@brief     ウィンドウを表示する
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawSetShowEnable()
+void Draw::showWindow()
 {
-  if(gDrawViewMode==VIEW_NONE)return;
+  if (m_windowEnable) return;
 
-  bool visible = !gWindowEnable;
+  //ウィンドウ作成
+  int win = gopen((int)((FIELD_LENGTH + 2 * FIELD_MARGIN)*SCALE), (int)((FIELD_WIDTH + 2 * FIELD_MARGIN)*SCALE));
 
-  if(visible)
-  {
-    drawInitialize(mycolor,mynumber);
-    printf("window show mode - enable\n");
+  if (win == -1) {
+    //ウィンドウ作成失敗
+    cerr << "error - initialize window" << endl;
+    return;
   }
-  else
-  {
-    gWindowEnable = false;
+  m_windowEnable = true;
+  m_window = win;
 
-    //ウィンドウを閉じる
-    //gclose(mainwindow);
-    gcloseall();
-    printf("window show mode - disable\n");
+  //ウィンドウの表示レイヤと描画先レイヤ（バックバッファ）を設定
+  layer(m_window, 0, 1);
+
+  //ウィンドウ描画文字列のフォント設定
+  gsetfontset(m_window, FONTNAME);
+
+  if (m_positiveIsRightSide) {
+    window(m_window, -FIELD_LENGTH2 - FIELD_MARGIN, -FIELD_WIDTH2 - FIELD_MARGIN - 10,
+      FIELD_LENGTH2 + FIELD_MARGIN, +FIELD_WIDTH2 + FIELD_MARGIN + 10);
+  } else {
+    window(m_window, FIELD_LENGTH2 + FIELD_MARGIN, +FIELD_WIDTH2 + FIELD_MARGIN + 10,
+      -FIELD_LENGTH2 - FIELD_MARGIN, -FIELD_WIDTH2 - FIELD_MARGIN - 10);
   }
+
+
 }
 
 ///
-///@brief     ログファイルビューアモードにする
+///@brief     ウィンドウを消去する
 ///@return なし
 ///
-void drawSetLogFileViewer()
+void Draw::hideWindow()
 {
-  gLogFileViewer = true;
+  if (!m_windowEnable) return;
+
+  m_windowEnable = false;
+  m_key = -1;
+  gclose(m_window);
 }
 
-
-// =====================================================================
-
-///
-///@brief     コンストラクタ
-///
-CDrawData::CDrawData()
-{
-  m_num = 0;
-  m_max = MAX_DRAW_OBJECT;
-  m_object.reserve(MAX_DRAW_OBJECT);
-}
-
-///
-///@brief 描画する点のデータを登録する
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetPoint(double x, double y, unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = POINT;
-  data.x1    = x;
-  data.y1    = y;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する×印のデータを登録する
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] size 寸法
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetCross(double x, double y,double size, unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = CROSS;
-  data.x1    = x;
-  data.y1    = y;
-  data.x2    = size;
-  data.y2    = size;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する線のデータを登録する
-///@param[in] x1 x座標1
-///@param[in] y1 y座標1
-///@param[in] x2 x座標2
-///@param[in] y2 y座標2
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetLine(double x1,double y1,double x2,double y2, unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = LINE;
-  data.x1    = x1;
-  data.y1    = y1;
-  data.x2    = x2;
-  data.y2    = y2;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する四角形のデータを登録する
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] cx x寸法
-///@param[in] cy y寸法
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetRectangle(    double x,double y,double cx,double cy,unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = RECTANGLE;
-  data.x1    = x;
-  data.y1    = y;
-  data.x2    = cx;
-  data.y2    = cy;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する四角形のデータを登録する(塗りつぶし)
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] cx x寸法
-///@param[in] cy y寸法
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetFillRectangle(double x,double y,double cx,double cy,unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = FILLRECTANGLE;
-  data.x1    = x;
-  data.y1    = y;
-  data.x2    = cx;
-  data.y2    = cy;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-
-}
-
-///
-///@brief 描画する円のデータを登録する
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] r 半径
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetCircle(double x, double y, double r,unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = CIRCLE;
-  data.x1    = x;
-  data.y1    = y;
-  data.r     = r;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する円のデータを登録する(塗りつぶし)
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] r 半径
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@return なし
-///
-void CDrawData::SetFillCircle(double x, double y, double r,unsigned rd,unsigned gr,unsigned bl)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = FILLCIRCLE;
-  data.x1    = x;
-  data.y1    = y;
-  data.r     = r;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief 描画する文字列のデータを登録する
-///@param[in] x x座標
-///@param[in] y y座標
-///@param[in] size 寸法
-///@param[in] rd 赤
-///@param[in] gr 緑
-///@param[in] bl 青
-///@param[in] str 文字列
-///@return なし
-///
-void CDrawData::SetString(double x, double y, int size, unsigned rd,unsigned gr,unsigned bl,char *str)
-{
-  if(m_num>=m_max)return;
-  DRAW_OBJECT data;
-  data.type  = STRING;
-  data.x1    = x;
-  data.y1    = y;
-  data.r     = size;
-  data.red   = rd;
-  data.green = gr;
-  data.blue  = bl;
-  data.str   = str;
-  m_object.push_back(data);
-  m_num++;
-}
-
-///
-///@brief  描画用のデータを取得する
-///@param[in] id
-///@param[out] data
-///@retval true 正常終了
-///@retval false 異常終了
-///
-bool CDrawData::GetObject(int id,DRAW_OBJECT &data)
-{
-  int num = (int)m_object.size();
-  if(num<=id||id<0)return false;
-  data = m_object.at(id);
-  return true;
-}
-
-///
-///@brief  クリーンする
-///@return なし
-///
-void CDrawData::CleanData()
-{
-  m_object.clear();
-  m_num = 0;
-}
 
 ///
 ///@brief  色を調整する
 ///@param[in] color 色要素の値
 ///@return 0～255に収めた結果
 ///
-inline unsigned char ChangeColor(int color)
+inline unsigned char Draw::changeColor(int color)
 {
   if(color<  0)return 0;
   if(color>255)return 255;
@@ -896,11 +531,9 @@ inline unsigned char ChangeColor(int color)
 ///@brief     登録されているウィンドウの描画オブジェクトをクリアする
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawClear()
+void Draw::clear()
 {
-  gDrawData.CleanData();
+  m_drawData.clear();
 }
 
 ///
@@ -910,13 +543,11 @@ void drawClear()
 ///@param[in] blue  青色 ( 0 to 255 )
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawSetColor(int red,int green,int blue)
+void Draw::setColor(int red,int green,int blue)
 {
-  gRed   = ChangeColor(red);
-  gGreen = ChangeColor(green);
-  gBlue  = ChangeColor(blue);
+  m_red   = changeColor(red);
+  m_green = changeColor(green);
+  m_blue  = changeColor(blue);
 }
 
 
@@ -927,13 +558,11 @@ void drawSetColor(int red,int green,int blue)
 ///@param[out] blue  青色 ( 0 to 255 )
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///
-void drawGetColor(int &red,int &green,int &blue)
+void Draw::getColor(int &red,int &green,int &blue)
 {
-  red   = gRed;
-  green = gGreen;
-  blue  = gBlue;
+  red   = m_red;
+  green = m_green;
+  blue  = m_blue;
 }
 
 ///
@@ -941,12 +570,9 @@ void drawGetColor(int &red,int &green,int &blue)
 ///@param[in] x,y            描画先座標 [mm]
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawPoint(double x,double y)
+void Draw::point(double x,double y)
 {
-  gDrawData.SetPoint(x,y,gRed,gGreen,gBlue);
+  m_drawData.setPoint(x, y, m_red, m_green, m_blue);
 }
 
 ///
@@ -955,12 +581,11 @@ void drawPoint(double x,double y)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawPoint( double x, double y , int red, int green, int blue)
+void Draw::point(double x, double y, int red, int green, int blue)
 {
-  gDrawData.SetPoint(x,y,red,green,blue);
+  m_drawData.setPoint(x, y, red, green, blue);
 }
 
 ///
@@ -969,12 +594,9 @@ void drawPoint( double x, double y , int red, int green, int blue)
 ///@param[in] size           十字の大きさ[mm](デフォルトでは30)＊省略可
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawCross(double x,double y,double size)
+void Draw::cross(double x, double y, double size)
 {
-  gDrawData.SetCross(x,y,size,gRed,gGreen,gBlue);
+  m_drawData.setCross(x, y, size, m_red, m_green, m_blue);
 }
 
 ///
@@ -984,12 +606,11 @@ void drawCross(double x,double y,double size)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawCross( double x, double y,int red, int green, int blue,double size)
+void Draw::cross(double x, double y, int red, int green, int blue, double size)
 {
-  gDrawData.SetCross(x,y,size,red,green,blue);
+  m_drawData.setCross(x, y, size, red, green, blue);
 }
 
 ///
@@ -998,12 +619,9 @@ void drawCross( double x, double y,int red, int green, int blue,double size)
 ///@param[in] x2,y2          点2の座標 [mm]
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawLine(double x1,double y1,double x2,double y2)
+void Draw::line(double x1, double y1, double x2, double y2)
 {
-  gDrawData.SetLine(x1,y1,x2,y2,gRed,gGreen,gBlue);
+  m_drawData.setLine(x1, y1, x2, y2, m_red, m_green, m_blue);
 }
 
 ///
@@ -1013,12 +631,11 @@ void drawLine(double x1,double y1,double x2,double y2)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawLine(  double x1,double y1,double x2,double y2, int red, int green, int blue)
+void Draw::line(double x1, double y1, double x2, double y2, int red, int green, int blue)
 {
-  gDrawData.SetLine(x1,y1,x2,y2,red,green,blue);
+  m_drawData.setLine(x1, y1, x2, y2, red, green, blue);
 }
 
 ///
@@ -1027,12 +644,9 @@ void drawLine(  double x1,double y1,double x2,double y2, int red, int green, int
 ///@param[in] cx,cy          四角形の幅 [mm]
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawRectangle(double x, double y, double cx, double cy)
+void Draw::rectangle(double x, double y, double cx, double cy)
 {
-  gDrawData.SetRectangle(x,y,cx,cy,gRed,gGreen,gBlue);
+  m_drawData.setRectangle(x, y, cx, cy, m_red, m_green, m_blue);
 }
 
 ///
@@ -1042,12 +656,11 @@ void drawRectangle(double x, double y, double cx, double cy)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawRectangle(double x, double y, double cx, double cy, int red, int green, int blue)
+void Draw::rectangle(double x, double y, double cx, double cy, int red, int green, int blue)
 {
-  gDrawData.SetRectangle(x,y,cx,cy,red,green,blue);
+  m_drawData.setRectangle(x, y, cx, cy, red, green, blue);
 }
 
 ///
@@ -1056,12 +669,9 @@ void drawRectangle(double x, double y, double cx, double cy, int red, int green,
 ///@param[in] cx,cy          四角形の幅 [mm]
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawFillRectangle(double x, double y, double cx, double cy)
+void Draw::fillRectangle(double x, double y, double cx, double cy)
 {
-  gDrawData.SetFillRectangle(x,y,cx,cy,gRed,gGreen,gBlue);
+  m_drawData.setFillRectangle(x, y, cx, cy, m_red, m_green, m_blue);
 }
 
 ///
@@ -1071,12 +681,11 @@ void drawFillRectangle(double x, double y, double cx, double cy)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawFillRectangle(double x, double y, double cx, double cy, int red, int green, int blue)
+void Draw::fillRectangle(double x, double y, double cx, double cy, int red, int green, int blue)
 {
-  gDrawData.SetFillRectangle(x,y,cx,cy,red,green,blue);
+  m_drawData.setFillRectangle(x, y, cx, cy, red, green, blue);
 }
 
 ///
@@ -1085,12 +694,9 @@ void drawFillRectangle(double x, double y, double cx, double cy, int red, int gr
 ///@param[in] r              円の半径
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawCircle(double x, double y, double r)
+void Draw::circle(double x, double y, double r)
 {
-  gDrawData.SetCircle(x,y,r,gRed,gGreen,gBlue);
+  m_drawData.setCircle(x, y, r, m_red, m_green, m_blue);
 }
 
 
@@ -1101,12 +707,11 @@ void drawCircle(double x, double y, double r)
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawCircle(double x, double y, double r, int red, int green, int blue)
+void Draw::circle(double x, double y, double r, int red, int green, int blue)
 {
-  gDrawData.SetCircle(x,y,r,red,green,blue);
+  m_drawData.setCircle(x, y, r, red, green, blue);
 }
 
 
@@ -1116,12 +721,9 @@ void drawCircle(double x, double y, double r, int red, int green, int blue)
 ///@param[in] r              円の半径
 ///@return なし
 ///
-///- 座標系に関係無く共通
-///- 描画色の設定は1回（呼び出した時）だけ有効
-///
-void drawFillCircle(double x, double y, double r )
+void Draw::fillCircle(double x, double y, double r)
 {
-  gDrawData.SetFillCircle(x,y,r,gRed,gGreen,gBlue);
+  m_drawData.setFillCircle(x, y, r, m_red, m_green, m_blue);
 }
 
 ///
@@ -1131,12 +733,11 @@ void drawFillCircle(double x, double y, double r )
 ///@param[in] red,green,blue 描画色(範囲 0 to 255)
 ///@return なし
 ///
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawFillCircle(double x, double y, double r, int red, int green, int blue)
+void Draw::fillCircle(double x, double y, double r, int red, int green, int blue)
 {
-  gDrawData.SetFillCircle(x,y,r,red,green,blue);
+  m_drawData.setFillCircle(x, y, r, red, green, blue);
 }
 
 ///
@@ -1147,9 +748,8 @@ void drawFillCircle(double x, double y, double r, int red, int green, int blue)
 ///@return なし
 ///
 ///- printf()構文と同じように文字を描画できる。
-///- 座標系に関係無く共通
 ///
-void drawString(double x, double y, int size, const char *str, ... )
+void Draw::string(double x, double y, int size, const char *str, ... )
 {
   assert(str);
 
@@ -1165,15 +765,11 @@ void drawString(double x, double y, int size, const char *str, ... )
   if (len==-1) {
     buf[sizeof(buf)-1] = '\0';//NULL文字付加
   } else {
-    buf[len]                 = '\0';
+    buf[len] = '\0';
   }
 
-  gDrawData.SetString(x,y,size,gRed,gGreen,gBlue,buf);
+  m_drawData.setString(x, y, size, m_red, m_green, m_blue, buf);
 }
-
-/*
-void drawtestmode(rx,ry,bx,by);
-*/
 
 ///
 ///@brief     文字列を描画する
@@ -1186,10 +782,9 @@ void drawtestmode(rx,ry,bx,by);
 ///@return なし
 ///
 ///- printf()構文と同じように文字を描画できる
-///- 座標系に関係無く共通
 ///- 描画色の設定は1回（呼び出した時）だけ有効
 ///
-void drawString(double x, double y, int size,int red,int green,int blue, const char *str, ... )
+void Draw::string(double x, double y, int size, int red, int green, int blue, const char *str, ...)
 {
   assert(str);
 
@@ -1205,66 +800,30 @@ void drawString(double x, double y, int size,int red,int green,int blue, const c
   if (len==-1) {
     buf[sizeof(buf)-1] = '\0';//NULL文字付加
   } else {
-    buf[len]                 = '\0';
+    buf[len] = '\0';
   }
 
-  gDrawData.SetString(x,y,size,red,green,blue,buf);
+  m_drawData.setString(x, y, size, red, green, blue, buf);
 }
 
-
-
 ///
-///@brief  ユーザー描画
+///@brief  キー入力
 ///@return なし
 ///
-void drawCommandProc()
+int Draw::getch()
 {
-  //ユーザー描画  
-  int i=0;
-  DRAW_OBJECT dobj;
-  while(1)
-  {
-    if(!gDrawData.GetObject(i,dobj))break;
-    newrgbcolor(mainwindow,dobj.red,dobj.green,dobj.blue);
-    switch(dobj.type)
-    {
-    case POINT:  //点描画
-      pset(mainwindow,(float)dobj.x1,(float)dobj.y1);
-      break;
-    case CROSS:  //×印描画
-      line(mainwindow, (float)dobj.x1,(float)(dobj.y1-dobj.y2), PENUP);
-      line(mainwindow, (float)dobj.x1,(float)(dobj.y1+dobj.y2), PENDOWN);
-      line(mainwindow, (float)(dobj.x1-dobj.x2),(float)dobj.y1, PENUP);
-      line(mainwindow, (float)(dobj.x1+dobj.x2),(float)dobj.y1, PENDOWN);
-      break;
-    case LINE:   //線描画
-      line(mainwindow,(float)dobj.x1,(float)dobj.y1,PENUP);
-      line(mainwindow,(float)dobj.x2,(float)dobj.y2,PENDOWN);
-      break;
-    case RECTANGLE:   //四角形
-      drawrect(mainwindow,(float)dobj.x1,(float)dobj.y1,(float)dobj.x2,(float)dobj.y2);
-      break;
-    case FILLRECTANGLE://四角形(塗りつぶし)
-      fillrect(mainwindow,(float)dobj.x1,(float)dobj.y1,(float)dobj.x2,(float)dobj.y2);
-      break;
-    case CIRCLE:       //円描画
-      circle(mainwindow,(float)dobj.x1,(float)dobj.y1,(float)dobj.r,(float)dobj.r);
-      break;
-    case FILLCIRCLE:   //円描画(塗りつぶし)
-      fillarc(mainwindow,(float)dobj.x1,(float)dobj.y1,(float)dobj.r,(float)dobj.r, 0.0f,360.0f,1);
-      break;
-    case STRING: //文字列描画
-      drawstr(mainwindow,(float)dobj.x1,(float)dobj.y1,(int)dobj.r,0,dobj.str.c_str());
-    }
-    i++;
+  static int keyPrev = -1;
+  static Timer timer;
+  int ret = -1;
+  if (m_key != keyPrev || timer.elapsed() > 0.2) {
+    ret = m_key;
+    timer.reset();
   }
-  //クリア
-  gDrawData.CleanData();
+  keyPrev = m_key;
+  return ret;
 }
 
 } //namespace odens
 
 
 ///@} doxygenのためのコメント（消してはいけない）
-
-

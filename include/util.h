@@ -2,8 +2,9 @@
 ///@file util.h
 ///@brief 便利なマクロや関数
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016, 2017, 2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/01/27 升谷 保博 Timerクラス
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///- 2008/02/13
@@ -17,6 +18,8 @@
 
 #pragma once
 #include <cmath>
+#include <chrono>
+#include <thread>
 
 namespace odens {
 
@@ -160,6 +163,61 @@ inline double absmin(double x,double y)
 {
   return((fabs(x) < fabs(y))? x : y);
 }
+
+///
+///@brief std::chronoを使って経過時間を計測するクラス．
+///
+class Timer {
+private:
+  std::chrono::high_resolution_clock::time_point begin; ///<開始時刻
+  double prev; ///<一つ前の時刻
+public:
+  Timer() {
+    begin = std::chrono::high_resolution_clock::now();
+    prev = 0;
+  };
+  ~Timer() {};
+  ///
+  ///@brief     経過時間を返す
+  ///@return    オブジェクトが生成されてからの経過時間 [s]
+  ///
+  double elapsed() {
+    std::chrono::high_resolution_clock::time_point now
+      = std::chrono::high_resolution_clock::now();
+    return 1e-9*std::chrono::duration_cast<std::chrono::nanoseconds>(now - begin).count();
+  }
+  ///
+  ///@brief     前回からの経過時間を差し引いて一時停止する
+  ///@param[in] interval 停止時間 [s]
+  ///@return    停止後の前回からの経過時間 [s]
+  ///
+  double sleep(double interval) {
+    double now = elapsed();
+    double second = interval - (now - prev);
+    std::this_thread::sleep_for(std::chrono::nanoseconds(int(1e9*second)));
+    now = elapsed();
+    double dt = now - prev;
+    prev = now;
+    return dt;
+  }
+  ///
+  ///@brief     前回からの経過時間を求める
+  ///@return    前回からの経過時間 [s]
+  ///
+  double delta() {
+    double now = elapsed();
+    double dt = now - prev;
+    prev = now;
+    return dt;
+  }
+  ///
+  ///@brief     基準の時間をリセット
+  ///@return    なし
+  ///
+  void reset() {
+    begin = std::chrono::high_resolution_clock::now();
+  }
+};
 
 } //namespace odens
 

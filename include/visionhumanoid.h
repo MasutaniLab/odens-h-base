@@ -7,7 +7,7 @@
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///@addtogroup visionhumanoid VisionHumanoid
-///@brief SSL-Visionサーバから位置情報受信しSSL Humanoid用に変換する
+///@brief SSL-Visionサーバから位置情報受信しSSL Humanoid用に変換するクラス
 ///@{
 ///
 

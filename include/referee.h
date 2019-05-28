@@ -7,7 +7,7 @@
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///@addtogroup referee Referee
-///@brief レフェリーボックスから信号を受信する
+///@brief レフェリーボックスから信号を受信するクラス
 ///@{
 ///
 #pragma once

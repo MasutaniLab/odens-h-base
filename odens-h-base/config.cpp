@@ -1,6 +1,6 @@
 ﻿///
 ///@file config.cpp
-///@brief コマンドラインと設定ファイルによって変数を設定する
+///@brief Configクラスのメンバ関数の定義
 ///@par Copyright
 /// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
@@ -48,7 +48,7 @@ bool    Config::Logger = false;
 ///@param[in] argc コマンドラインの引数の数
 ///@param[in] argv コマンドラインの引数
 ///@retval false 正常終了
-///@retval false 異常終了
+///@retval true 異常終了
 ///
 bool Config::setup(int argc, char* argv[])
 {
@@ -249,7 +249,7 @@ void Config::print()
 ///@param[in] name 内容を区別するための文字列
 ///@param[in] s 値の並びが入った文字列
 ///@retval false 正常終了
-///@retval false 異常終了
+///@retval true 異常終了
 ///
 bool setRobotTable(int table[], const string &name, const string &s)
 {

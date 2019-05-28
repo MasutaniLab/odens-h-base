@@ -7,7 +7,7 @@
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///@addtogroup vision Vision
-///@brief SSL-Visionサーバから位置情報を受信する
+///@brief SSL-Visionサーバから位置情報を受信するクラス
 ///@{
 ///
 

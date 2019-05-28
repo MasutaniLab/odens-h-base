@@ -11,20 +11,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{6E4B2445-723E-49BF-9F30-9CA8670F480D}</ProjectGuid>
-    <RootNamespace>odenshcore</RootNamespace>
-    <ProjectName>odens-h-base</ProjectName>
+    <ProjectGuid>{7B9415F7-CCD1-4369-AB6C-E63686600487}</ProjectGuid>
+    <RootNamespace>drawtest</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -33,34 +32,24 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\odens-h-base.props" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\odens-h-base.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <TargetExt>.lib</TargetExt>
-    <TargetName>$(ProjectName)d</TargetName>
-    <OutDir>$(SolutionDir)lib\</OutDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <TargetExt>.lib</TargetExt>
-    <OutDir>$(SolutionDir)lib\</OutDir>
-  </PropertyGroup>
+  <PropertyGroup />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>..\protoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
-    <Link>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -69,49 +58,20 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>..\protoc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\protoc\messages_robocup_ssl_detection.pb.cc" />
-    <ClCompile Include="..\protoc\messages_robocup_ssl_geometry.pb.cc" />
-    <ClCompile Include="..\protoc\messages_robocup_ssl_wrapper.pb.cc" />
-    <ClCompile Include="..\protoc\referee.pb.cc" />
-    <ClCompile Include="cdrawdata.cpp" />
-    <ClCompile Include="config.cpp" />
-    <ClCompile Include="draw.cpp" />
-    <ClCompile Include="estimator.cpp" />
-    <ClCompile Include="game.cpp" />
-    <ClCompile Include="logger.cpp" />
-    <ClCompile Include="referee.cpp" />
-    <ClCompile Include="robot.cpp" />
-    <ClCompile Include="sr.cpp" />
-    <ClCompile Include="util.cpp" />
-    <ClCompile Include="vision.cpp" />
-    <ClCompile Include="visionhumanoid.cpp" />
+    <ClCompile Include="draw-test.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\cdrawdata.h" />
     <ClInclude Include="..\include\config.h" />
     <ClInclude Include="..\include\draw.h" />
-    <ClInclude Include="..\include\estimator.h" />
-    <ClInclude Include="..\include\game.h" />
-    <ClInclude Include="..\include\logger.h" />
-    <ClInclude Include="..\include\referee.h" />
-    <ClInclude Include="..\include\robot.h" />
     <ClInclude Include="..\include\sr.h" />
     <ClInclude Include="..\include\util.h" />
-    <ClInclude Include="..\include\vision.h" />
-    <ClInclude Include="..\include\visionhumanoid.h" />
-    <ClInclude Include="..\protoc\messages_robocup_ssl_detection.pb.h" />
-    <ClInclude Include="..\protoc\messages_robocup_ssl_geometry.pb.h" />
-    <ClInclude Include="..\protoc\messages_robocup_ssl_wrapper.pb.h" />
-    <ClInclude Include="..\protoc\referee.pb.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

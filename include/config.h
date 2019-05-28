@@ -1,13 +1,13 @@
 ﻿///
 ///@file config.h
-///@brief コマンドラインと設定ファイルによって変数を設定する
+///@brief Configクラスの宣言
 ///@par Copyright
 /// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///@addtogroup config Config
-///@brief 変数設定
+///@brief コマンドラインと設定ファイルによって変数を設定するクラス
 ///@{
 ///
 

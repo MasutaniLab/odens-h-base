@@ -2,8 +2,9 @@
 ///@file robot-test.cpp
 ///@brief Robotクラスのテストプログラム（公開用）
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016-2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/03/03 升谷 保博
 ///- 2018/02/18 升谷 保博 KXR-L2を追加
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
@@ -23,7 +24,6 @@ using namespace odens;
 
 ///キーとロボットのコマンド対応を表示する
 void printHelp(Robot *pr);
-int test(Robot *pr);
 
 ///robot-testメイン関数
 int main(int argc, char* argv[])
@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
     probot = new khr3::KHR3();
   } else if (Config::RobotType == "KXRL2") {
     probot = new kxrl2::KXRL2();
-  } else {
+  } else { 
     cerr << "RobotType 未登録" << endl;
     return 1;
   }
@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
         probot->setCommand(com);
       }
     }
-    msleep(16);
+    msleep(100);
   }
   return 0;
 

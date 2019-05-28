@@ -2,7 +2,7 @@
 
 大阪電気通信大学 総合情報学部 情報学科  
 升谷 保博  
-2018年2月18日  
+2019年5月28日  
 
 ## 概要
 
@@ -31,33 +31,34 @@ KXR-L2用のクラスを用意している．
 - どこかに作業のディレクトリを作る．それを`H`と書くことにする．
   後述のboostとprotobufのファイル以外は全てHの下に置く．
 
-### boostのインストール．
+### boostのインストール
 
-- https://sourceforge.net/projects/boost/files/boost-binaries/1.66.0/
-  から`boost_1_66_0-msvc-14.0-64.exe`をダウンロード．
+- https://sourceforge.net/projects/boost/files/boost-binaries/1.69.0/
+  から`boost_1_69_0-msvc-14.0-64.exe`をダウンロード．
   似たファイルが多いので間違えないように（14.1ではなく14.0を選ぶこと）．
-- `boost_1_66_0-msvc-14.0-64.exe` を実行してインストール．
-  インストール場所をデフォルトのままでなく，必ず`C:\boost\boost_1_66_0`にすること．
+- `boost_1_69_0-msvc-14.0-64.exe` を実行してインストール．
+  インストール場所をデフォルトのままでなく，必ず`C:\boost\boost_1_69_0`にすること．
 
 
 ### Protocol Buffers のインストール
 
-- https://github.com/google/protobuf/releases/tag/v3.5.1 から
-  `protobuf-all-3.5.1.zip` をダウンロード．
-- `protobuf-all-3.5.1.zip`を適当な場所に展開．
-  ディレクトリ`protobuf-3.5.1`ができる．
+- https://github.com/google/protobuf/releases/tag/v3.7.0 から
+  `protobuf-all-3.7.0.zip` をダウンロード．
+- `protobuf-all-3.7.0.zip`を適当な場所に展開．
+  ディレクトリ`protobuf-3.7.0`ができる．
 - CMake (cmake-gui)を実行
-  - Where is the source code に `～/protobuf-3.5.1/cmake`
-  - Where to build the binaries に `～/protobuf-3.5.1/cmake/build`
+  - Where is the source code に `～/protobuf-3.7.0/cmake`
+  - Where to build the binaries に `～/protobuf-3.7.0/cmake/build`
   - Configure をクリックし，で `Visual Studio 14 2015 Win64` を選択．
   - Configure 処理後に表示されるオプション一覧において，
     - `protobuf_BUILD_TESTS` のチェックを外す．
     - `protobuf_MSVC_STATIC_RUNTIME` のチェックを外す．
   - 再度 Configure をクリック．
   - Generate をクリック．
-- `～\protobuf-3.5.1\cmake\build\protobuf.sln`をVisual Studio 2015で開く．
+- `～\protobuf-3.7.0\cmake\build\protobuf.sln`をVisual Studio 2015で開く．
 - ソリューション構成を`Release x64`にする．
 - メニューのビルド→ソリューションのビルド．
+-  `C:\Program Files\protobuf`が既にある場合は，削除するか，別名に変更する．
 - `C:\Program Files` の下に`protobuf`フォルダを作る．拒否されるが続行する．
 - `protobuf` フォルダを右クリックでプロパティ，セキュリティタブで編集をクリック，
   Usersを選び，アクセス許可で，フルコントロールの許可をチェックしてOK．
@@ -66,9 +67,10 @@ KXR-L2用のクラスを用意している．
 
 ### Doxygenのインストール
 
-- http://www.stack.nl/~dimitri/doxygen/download.html から
-  `doxygen-1.8.14-setup.exe` をダウンロード．
-- `doxygen-1.8.14-setup.exe`を実行しインストール．
+- https://sourceforge.net/projects/doxygen/files/rel-1.8.15/ から
+  `doxygen-1.8.15-setup.exe` をダウンロード．
+  （http://www.doxygen.nl/download.html が本家だが遅いので）
+- `doxygen-1.8.15-setup.exe`を実行しインストール．
 
 
 ### Windows版 EGGXのインストール
@@ -92,6 +94,7 @@ KXR-L2用のクラスを用意している．
   `H\odens-h-base`にGitクローンする．
 - ソリューション構成を`Release x64`にする．
 - メニューのビルド→ソリューションのビルド．
+- - `H\odens-h-base\Release\`にある`odens-sample.conf`を`odens.conf`という名前でコピー（別名保存）する．
 
 ## Doxygenによるドキュメント生成
 
@@ -107,6 +110,10 @@ KXR-L2用のクラスを用意している．
 - Configクラスのテストプログラム
 - コマンドラインや設定ファイルの仕様を変更した場合は，これでテストする．
 
+### draw-test
+
+- Drawクラスのテストプログラム．
+- Configクラスも使っている．
 
 ### game-test
 
@@ -115,11 +122,9 @@ KXR-L2用のクラスを用意している．
 - ConfigクラスとRefereeクラスも使っている．
 - ビジョンも使うべき？
 
-
 ### logger-test
 
 - Loggerクラスのテストプログラム．
-
 
 ### odens-h-base
 
@@ -135,13 +140,11 @@ KXR-L2用のクラスを用意している．
   イル`*.proto`から，`*.pb.cc`と`*.pb.h`を生成する．
 - 単独で利用することはない．
 
-
 ### referee-test
 
 - Refreeクラスのテストプログラム．
 - レフェリーボックスからの情報受信を確認する場合には，これを使う．
 - Configクラスも使っている．
-
 
 ### robot-test
 
@@ -162,7 +165,6 @@ KXR-L2用のクラスを用意している．
   認する場合には，これを使う．
 - Esimatorクラスの動作確認にもこれを使う．
 - Configクラスも使っている．
-
 
 ## 実行方法
 
@@ -255,5 +257,16 @@ Doxygenが生成したドキュメントを参照のこと
   出してプログラムを強制的に終了させているが，これは危険ではないか？
 
 - CMake化．
+
+## 履歴
+
+- 2019年5月28日
+  - 2019年版
+  - 利用しているboost, protobuf, wineggtx, doxygenのバージョンを変更．
+  - Drawクラスの導入
+  - その他 バグフィックス等
+   
+- 2018年2月18日
+  - 初公開
 
 以上．

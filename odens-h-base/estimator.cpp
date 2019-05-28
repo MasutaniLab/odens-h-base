@@ -1,6 +1,6 @@
 ﻿///
 ///@file estimator.cpp
-///@brief Orthogonal用位置推定
+///@brief Estimatorクラスのメンバ関数の定義
 ///@par Copyright
 /// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴

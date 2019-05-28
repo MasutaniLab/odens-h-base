@@ -2,8 +2,9 @@
 ///@file sr-test.cpp
 ///@brief Orthogonalテストプログラム
 ///@par Copyright
-/// Copyright (C) 2016, 2017 Team ODENS, Masutani Lab, Osaka Electro-Communication University
+/// Copyright (C) 2016, 2017，2019 Team ODENS, Masutani Lab, Osaka Electro-Communication University
 ///@par 履歴
+///- 2019/02/03 升谷 保博 Drawのクラス化に対応
 ///- 2017/03/04 升谷 保博 odens-h-base
 ///- 2016/03/11 升谷 保博 odens-h2
 ///
@@ -31,7 +32,8 @@ int main(int argc, char* argv[])
   Config::print();
 
   getTimeInitialize();
-  drawInitialize(Config::MyColor, Config::MyNumber); 
+  const double drawInterval = 1.0 / 30.0;
+  draw.initialize(Config::MyColor, Config::MyNumber, drawInterval);
   inkeyInitialize();
 
   //SSL-Visionの設定
@@ -74,22 +76,22 @@ int main(int argc, char* argv[])
 
     //ボールとゴールを結ぶ位置関係から決まる点の算出の例
     Orthogonal goal(FIELD_LENGTH2,0,0);
-    drawLine(ball.x,ball.y,goal.x,goal.y,255,255,255);
+    draw.line(ball.x,ball.y,goal.x,goal.y,255,255,255);
     //原点ボール，x軸がゴールの方向の座標系の設定
     Orthogonal ballFrame = ball;
     ballFrame.theta = goal.angle(ball);
     //ボールの前方300mm, 左400mmの点（赤十字）
     Orthogonal pos1Local(300,400,0); //ボール座標系での位置
     Orthogonal pos1 = pos1Local.inverseTransform(ballFrame); //フィールド座標系に変換
-    drawCross(pos1.x,pos1.y,255,0,0);
+    draw.cross(pos1.x,pos1.y,255,0,0);
     //ボールの真後ろ200mm（青十字）
     Orthogonal pos2 = Orthogonal(-200,0,0).inverseTransform(ballFrame); //こういう書き方も可能
-    drawCross(pos2.x,pos2.y,0,0,255);
+    draw.cross(pos2.x,pos2.y,0,0,255);
 
     //フィールド描画
-    draw(sinfo, sinfo2);
+    draw.set(sinfo, sinfo2);
   }
-  drawTerminate();
+  draw.terminate();
   return 0;
 }
 
