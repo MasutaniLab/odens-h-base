@@ -126,6 +126,7 @@ void Draw::main()
   VisionInfo vi;
   DrawMode drawMode;
   Timer timer;
+  CDrawData drawData;
   m_loop = true;
   while (m_loop) {
     //時間間隔がintervalになるように眠る
@@ -134,6 +135,7 @@ void Draw::main()
     {
       boost::mutex::scoped_lock lock(m_mutex);
       drawMode = m_drawMode;
+      drawData = m_drawDataBuffer;
       if (drawMode == NoEstimation) {
         si = m_srInfo;
       } else if (drawMode == WithEstimation) {
@@ -152,7 +154,7 @@ void Draw::main()
     drawField();
 
     //ユーザー描画  
-    m_drawDataBuffer.draw(m_window);
+    drawData.draw(m_window);
 
     if (drawMode == NoEstimation) {
       //ボールを描く
